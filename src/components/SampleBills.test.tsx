@@ -1,6 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SAMPLE_BILL_DISCLAIMER, SAMPLE_BILLS } from "@/data/sampleBills";
+import { ADVICE_NOTE, ESTIMATE_LABEL, computeFlags } from "@/lib/flagEngine";
+import { explainCode } from "@/lib/plainEnglish";
 import { SampleBills } from "./SampleBills";
 
 function billView() {
@@ -34,12 +36,16 @@ describe("SampleBills", () => {
       expect(view.getByText(SAMPLE_BILL_DISCLAIMER)).toBeInTheDocument();
       for (const item of bill.lineItems) {
         expect(view.getAllByText(item.code).length).toBeGreaterThan(0);
-        if (item.expectedFlag) {
-          expect(view.getAllByText(item.expectedFlag.message, { exact: false }).length).toBe(1);
-        }
+        expect(view.getAllByText(explainCode(item.code, item.description)).length).toBeGreaterThan(
+          0,
+        );
       }
+      expect(view.getByRole("heading", { name: ESTIMATE_LABEL })).toBeInTheDocument();
+      const sourcesList = within(view.getByRole("heading", { name: "Sources" }).parentElement!);
       for (const source of bill.sources) {
-        const link = view.getByRole("link", { name: `${source.label} (opens in a new tab)` });
+        const link = sourcesList.getByRole("link", {
+          name: `${source.label} (opens in a new tab)`,
+        });
         expect(link).toHaveAttribute("href", source.url);
       }
     },
@@ -56,6 +62,45 @@ describe("SampleBills", () => {
     expect(view.getByText("Morgan Sampleton")).toBeInTheDocument();
     expect(view.queryByText("Jordan Fake-Ellis")).not.toBeInTheDocument();
     expect(view.getByText("No issues flagged")).toBeInTheDocument();
+  });
+
+  it.each(SAMPLE_BILLS.filter((b) => computeFlags(b).length > 0).map((b) => [b.title, b] as const))(
+    "clicking %s shows the engine flags with the advice note",
+    async (title, bill) => {
+      const user = userEvent.setup();
+      render(<SampleBills />);
+      await user.click(screen.getByRole("button", { name: new RegExp(title, "i") }));
+
+      const flags = computeFlags(bill);
+      const cards = billView().querySelectorAll("[data-flag-type]");
+      expect(Array.from(cards, (c) => c.getAttribute("data-flag-type"))).toEqual(
+        flags.map((f) => f.type),
+      );
+      flags.forEach((flag, i) => {
+        const card = within(cards[i] as HTMLElement);
+        expect(card.getByText(flag.message)).toBeInTheDocument();
+        expect(card.getByText(flag.explanation)).toBeInTheDocument();
+        expect(card.getByText(ADVICE_NOTE)).toBeInTheDocument();
+        expect(
+          card.getByRole("link", { name: `${flag.source.label} (opens in a new tab)` }),
+        ).toHaveAttribute("href", flag.source.url);
+      });
+    },
+  );
+
+  it("shows no flag cards for the clean bill", async () => {
+    const user = userEvent.setup();
+    render(<SampleBills />);
+    await user.click(screen.getByRole("button", { name: /clean bill/i }));
+    expect(billView().querySelectorAll("[data-flag-type]")).toHaveLength(0);
+    expect(within(billView()).getByText(/None of our checks matched/)).toBeInTheDocument();
+  });
+
+  it("shows that an unbundled bill can't be estimated", async () => {
+    const user = userEvent.setup();
+    render(<SampleBills />);
+    await user.click(screen.getByRole("button", { name: /unbundled procedure/i }));
+    expect(within(billView()).getByText("Can't be estimated")).toBeInTheDocument();
   });
 
   it("shows the unbundling message with CMS-guidance wording", async () => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SAMPLE_BILLS } from "@/data/sampleBills";
+import { computeFlags } from "@/lib/flagEngine";
 import { BillView } from "./BillView";
 
 export function SampleBills() {
@@ -29,7 +30,7 @@ export function SampleBills() {
       </p>
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {SAMPLE_BILLS.map((bill) => {
-          const flagged = bill.lineItems.some((item) => item.expectedFlag);
+          const flagged = computeFlags(bill).length > 0;
           const pressed = bill.id === selectedId;
           return (
             <li key={bill.id}>
