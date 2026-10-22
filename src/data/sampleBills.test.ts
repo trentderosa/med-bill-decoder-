@@ -1,3 +1,5 @@
+import { computeFlags, estimateOwed } from "@/lib/flagEngine";
+import { explainCode, explainDx } from "@/lib/plainEnglish";
 import { SAMPLE_BILL_DISCLAIMER, SAMPLE_BILLS } from "./sampleBills";
 
 const FAKE_PATIENTS = [
@@ -52,24 +54,27 @@ describe("SAMPLE_BILLS data", () => {
     }
   });
 
-  it("encodes the scenario amounts and flags", () => {
+  it("encodes the scenario amounts and context", () => {
     const byId = Object.fromEntries(SAMPLE_BILLS.map((b) => [b.id, b]));
     const total = (id: string) =>
       byId[id]!.lineItems.reduce((sum, item) => sum + item.amountCents, 0);
 
     expect(byId["unbundled-procedure"]!.lineItems.every((i) => i.dx === undefined)).toBe(true);
     expect(total("surprise-balance-bill")).toBe(220000);
-    expect(byId["surprise-balance-bill"]!.comparison?.kind).toBe("eob-patient-balance");
+    expect(byId["surprise-balance-bill"]!.context).toMatchObject({
+      providerNetwork: "out-of-network",
+      facilityNetwork: "in-network",
+      emergency: false,
+      noticeAndConsentWaiverSigned: false,
+    });
     expect(total("over-good-faith-estimate")).toBe(65000);
-    expect(byId["over-good-faith-estimate"]!.comparison?.amountCents).toBe(20000);
+    expect(byId["over-good-faith-estimate"]!.context.gfeTotalCents).toBe(20000);
+    expect(byId["upcoded-visit"]!.context.documentedVisitMinutes).toBe(10);
     expect(total("clean-bill")).toBe(4000);
-    expect(byId["clean-bill"]!.comparison?.amountCents).toBe(4000);
-    expect(byId["clean-bill"]!.lineItems.some((i) => i.expectedFlag)).toBe(false);
-
-    const unbundling = SAMPLE_BILLS.flatMap((b) => b.lineItems).find(
-      (i) => i.expectedFlag?.type === "unbundling",
-    );
-    expect(unbundling?.expectedFlag?.message).toContain("commonly bundled per CMS guidance");
+    expect(byId["clean-bill"]!.context.eobPatientBalanceCents).toBe(4000);
+    for (const bill of SAMPLE_BILLS) {
+      for (const item of bill.lineItems) expect(item).not.toHaveProperty("expectedFlag");
+    }
   });
 });
 
@@ -78,7 +83,7 @@ describe("SAMPLE_BILLS data", () => {
 // (e.g. the $25 PPDR fee in 45 CFR 149.620).
 const CITATION = /\b\d+\s+CFR\s+\d+(\.\d+)?\b|https?:\/\//i;
 
-describe("dollar amounts in card and summary text", () => {
+describe("dollar amounts in card, summary, flag, and estimate text", () => {
   it.each(SAMPLE_BILLS.map((b) => [b.title, b] as const))(
     "%s: every $ text is labeled illustrative or cites a source",
     (_title, bill) => {
@@ -86,9 +91,12 @@ describe("dollar amounts in card and summary text", () => {
         bill.title,
         bill.summary,
         ...(bill.notes ?? []),
-        ...bill.lineItems.flatMap((li) =>
-          li.expectedFlag ? [li.expectedFlag.message] : [],
-        ),
+        ...bill.lineItems.flatMap((li) => [
+          explainCode(li.code, li.description),
+          ...(li.dx ? [explainDx(li.dx.code, li.dx.description)] : []),
+        ]),
+        ...computeFlags(bill).flatMap((flag) => [flag.message, flag.explanation]),
+        ...estimateOwed(bill).steps,
       ];
       for (const text of texts.filter((t) => t.includes("$"))) {
         const ok = /illustrative/i.test(text) || CITATION.test(text);

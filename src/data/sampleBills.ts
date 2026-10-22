@@ -3,42 +3,15 @@
 // CPT / ICD-10-CM codes are real and limited to the ones verified for these
 // scenarios.
 
-export type FlagType =
-  | "duplicate"
-  | "upcoding"
-  | "unbundling"
-  | "balance-billing"
-  | "gfe-overage";
+import type { BillContext, EngineLineItem } from "@/lib/flagEngine";
+import { SOURCES, type Source } from "@/lib/sources";
 
-export type ExpectedFlag = {
-  type: FlagType;
-  message: string;
-};
+export type { Source };
 
-export type LineItem = {
-  id: string;
-  /** Date of service, ISO yyyy-mm-dd. */
-  date: string;
-  /** CPT code. */
-  code: string;
+export type LineItem = EngineLineItem & {
   description: string;
   /** ICD-10-CM diagnosis, if one is assigned. */
   dx?: { code: string; description: string };
-  /** Illustrative amount in cents. */
-  amountCents: number;
-  expectedFlag?: ExpectedFlag;
-};
-
-export type BillComparison = {
-  kind: "eob-patient-balance" | "good-faith-estimate";
-  label: string;
-  /** Illustrative amount in cents. */
-  amountCents: number;
-};
-
-export type Source = {
-  label: string;
-  url: string;
 };
 
 export type SampleBill = {
@@ -51,7 +24,8 @@ export type SampleBill = {
   /** Extra context about the visit, shown above the line items. */
   notes?: readonly string[];
   lineItems: readonly LineItem[];
-  comparison?: BillComparison;
+  /** Facts the flag engine needs (network status, EOB, GFE, visit time). */
+  context: BillContext;
   illustrative: true;
   disclaimerLabel: typeof SAMPLE_BILL_DISCLAIMER;
   sources: readonly Source[];
@@ -66,61 +40,8 @@ const DX_S93_401A = {
   description: "Sprain of unspecified ligament of right ankle, initial encounter",
 } as const;
 
-const DESC_99213 =
-  "Established patient office visit, low medical decision making (20–29 min)";
-const DESC_99215 =
-  "Established patient office visit, high medical decision making (40–54 min)";
-
-const SRC = {
-  amaEm: {
-    label: "AMA: E/M office visit changes (CPT 99211–99215)",
-    url: "https://www.ama-assn.org/system/files/2020-04/e-m-office-visit-changes.pdf",
-  },
-  cmsEm: {
-    label: "CMS MLN: Evaluation and Management Services guide",
-    url: "https://www.cms.gov/files/document/mln006764-evaluation-management-services.pdf",
-  },
-  icd10: {
-    label: "CDC/NCHS: ICD-10-CM FY2026 code files",
-    url: "https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Publications/ICD10CM/2026/",
-  },
-  rvu: {
-    label: "CMS: PFS Relative Value File RVU26D (CPT status)",
-    url: "https://www.cms.gov/medicare/payment/fee-schedules/physician/pfs-relative-value-files/rvu26d",
-  },
-  ncciManual: {
-    label: "CMS: 2026 NCCI Policy Manual, Chapter 1",
-    url: "https://www.cms.gov/files/document/01-chapter1-ncci-medicare-policy-manual-2026-final.pdf",
-  },
-  ncciPtp: {
-    label: "CMS: NCCI procedure-to-procedure (PTP) edits",
-    url: "https://www.cms.gov/medicare/coding-billing/national-correct-coding-initiative-ncci-edits/medicare-ncci-procedure-procedure-ptp-edits",
-  },
-  racDuplicate: {
-    label: "CMS: RAC topic 0091 — exact duplicate claims",
-    url: "https://www.cms.gov/research-statistics-data-and-systems/monitoring-programs/medicare-ffs-compliance-programs/recovery-audit-program/approved-rac-topics-items/0091-exact-duplicate-claims",
-  },
-  fraudAbuse: {
-    label: "CMS MLN: Medicare fraud & abuse",
-    url: "https://www.cms.gov/outreach-and-education/medicare-learning-network-mln/mlnproducts/downloads/fraud-abuse-mln4649244.pdf",
-  },
-  nsaProtections: {
-    label: "CMS: No Surprises Act key protections",
-    url: "https://www.cms.gov/files/document/nsa-keyprotections.pdf",
-  },
-  readEob: {
-    label: "CMS: How to read your Explanation of Benefits",
-    url: "https://www.cms.gov/initiatives/your-patient-rights/medical-bill-rights/get-help/guides-resources/read-explanation-benefits",
-  },
-  disputeBill: {
-    label: "CMS: Dispute a medical bill",
-    url: "https://www.cms.gov/medical-bill-rights/help/dispute-a-bill",
-  },
-  cfr149620: {
-    label: "45 CFR 149.620 — patient-provider dispute resolution",
-    url: "https://www.ecfr.gov/current/title-45/subtitle-A/subchapter-B/part-149/subpart-G/section-149.620",
-  },
-} as const satisfies Record<string, Source>;
+const DESC_99213 = "Established patient office visit, low medical decision making (20–29 min)";
+const DESC_99215 = "Established patient office visit, high medical decision making (40–54 min)";
 
 export const SAMPLE_BILLS: readonly SampleBill[] = [
   {
@@ -136,6 +57,7 @@ export const SAMPLE_BILLS: readonly SampleBill[] = [
         code: "99213",
         description: DESC_99213,
         dx: DX_J02_9,
+        units: 1,
         amountCents: 15000,
       },
       {
@@ -144,16 +66,14 @@ export const SAMPLE_BILLS: readonly SampleBill[] = [
         code: "99213",
         description: DESC_99213,
         dx: DX_J02_9,
+        units: 1,
         amountCents: 15000,
-        expectedFlag: {
-          type: "duplicate",
-          message: "Possible duplicate. Ask the provider for an itemized bill.",
-        },
       },
     ],
+    context: {},
     illustrative: true,
     disclaimerLabel: SAMPLE_BILL_DISCLAIMER,
-    sources: [SRC.racDuplicate, SRC.amaEm, SRC.cmsEm, SRC.rvu, SRC.icd10],
+    sources: [SOURCES.racDuplicate, SOURCES.amaEm, SOURCES.cmsEm, SOURCES.rvu, SOURCES.icd10],
   },
   {
     id: "upcoded-visit",
@@ -169,17 +89,14 @@ export const SAMPLE_BILLS: readonly SampleBill[] = [
         code: "99215",
         description: DESC_99215,
         dx: DX_J02_9,
+        units: 1,
         amountCents: 31000,
-        expectedFlag: {
-          type: "upcoding",
-          message:
-            "Visit level looks high for the time or complexity described. This is a heuristic, not proof.",
-        },
       },
     ],
+    context: { documentedVisitMinutes: 10 },
     illustrative: true,
     disclaimerLabel: SAMPLE_BILL_DISCLAIMER,
-    sources: [SRC.amaEm, SRC.cmsEm, SRC.fraudAbuse, SRC.rvu, SRC.icd10],
+    sources: [SOURCES.amaEm, SOURCES.cmsEm, SOURCES.fraudAbuse, SOURCES.rvu, SOURCES.icd10],
   },
   {
     id: "unbundled-procedure",
@@ -193,6 +110,7 @@ export const SAMPLE_BILLS: readonly SampleBill[] = [
         date: "2026-05-21",
         code: "58260",
         description: "Vaginal hysterectomy, uterus 250 g or less",
+        units: 1,
         amountCents: 400000,
       },
       {
@@ -200,17 +118,14 @@ export const SAMPLE_BILLS: readonly SampleBill[] = [
         date: "2026-05-21",
         code: "58720",
         description: "Salpingo-oophorectomy",
+        units: 1,
         amountCents: 150000,
-        expectedFlag: {
-          type: "unbundling",
-          message:
-            "These codes are commonly bundled per CMS guidance and may need to be billed as one combined code (58262).",
-        },
       },
     ],
+    context: {},
     illustrative: true,
     disclaimerLabel: SAMPLE_BILL_DISCLAIMER,
-    sources: [SRC.ncciManual, SRC.ncciPtp, SRC.rvu],
+    sources: [SOURCES.ncciManual, SOURCES.ncciPtp, SOURCES.rvu],
   },
   {
     id: "surprise-balance-bill",
@@ -232,21 +147,21 @@ export const SAMPLE_BILLS: readonly SampleBill[] = [
         code: "58262",
         description:
           "Vaginal hysterectomy, uterus 250 g or less, with removal of tube(s) and/or ovary(s)",
+        units: 1,
         amountCents: 220000,
-        expectedFlag: {
-          type: "balance-billing",
-          message: "Bill is higher than your EOB patient balance. NSA protections may apply.",
-        },
       },
     ],
-    comparison: {
-      kind: "eob-patient-balance",
-      label: "EOB patient balance (in-network cost-sharing)",
-      amountCents: 30000,
+    context: {
+      coverage: "insured",
+      providerNetwork: "out-of-network",
+      facilityNetwork: "in-network",
+      emergency: false,
+      noticeAndConsentWaiverSigned: false,
+      eobPatientBalanceCents: 30000,
     },
     illustrative: true,
     disclaimerLabel: SAMPLE_BILL_DISCLAIMER,
-    sources: [SRC.nsaProtections, SRC.readEob, SRC.rvu],
+    sources: [SOURCES.nsaProtections, SOURCES.readEob, SOURCES.rvu],
   },
   {
     id: "over-good-faith-estimate",
@@ -254,9 +169,6 @@ export const SAMPLE_BILLS: readonly SampleBill[] = [
     summary: "Self-pay bill $450 above the estimate (illustrative)",
     patient: { name: "Lee Imaginary", note: "Uninsured, self-pay" },
     provider: { name: "Cedar Point Orthopedics (fictional)" },
-    notes: [
-      "Patient-provider dispute resolution: file within 120 days of receiving the bill. The fee is $25 (45 CFR 149.620).",
-    ],
     lineItems: [
       {
         id: "gfe-1",
@@ -264,21 +176,14 @@ export const SAMPLE_BILLS: readonly SampleBill[] = [
         code: "99213",
         description: DESC_99213,
         dx: DX_S93_401A,
+        units: 1,
         amountCents: 65000,
-        expectedFlag: {
-          type: "gfe-overage",
-          message: "You may be eligible to dispute. Here's the deadline.",
-        },
       },
     ],
-    comparison: {
-      kind: "good-faith-estimate",
-      label: "Good Faith Estimate total",
-      amountCents: 20000,
-    },
+    context: { coverage: "self-pay", gfeTotalCents: 20000 },
     illustrative: true,
     disclaimerLabel: SAMPLE_BILL_DISCLAIMER,
-    sources: [SRC.disputeBill, SRC.cfr149620, SRC.amaEm, SRC.rvu, SRC.icd10],
+    sources: [SOURCES.disputeBill, SOURCES.cfr149620, SOURCES.amaEm, SOURCES.rvu, SOURCES.icd10],
   },
   {
     id: "clean-bill",
@@ -293,26 +198,13 @@ export const SAMPLE_BILLS: readonly SampleBill[] = [
         code: "99213",
         description: DESC_99213,
         dx: DX_J02_9,
+        units: 1,
         amountCents: 4000,
       },
     ],
-    comparison: {
-      kind: "eob-patient-balance",
-      label: "EOB patient balance",
-      amountCents: 4000,
-    },
+    context: { coverage: "insured", eobPatientBalanceCents: 4000 },
     illustrative: true,
     disclaimerLabel: SAMPLE_BILL_DISCLAIMER,
-    sources: [SRC.readEob, SRC.amaEm, SRC.rvu, SRC.icd10],
+    sources: [SOURCES.readEob, SOURCES.amaEm, SOURCES.rvu, SOURCES.icd10],
   },
 ];
-
-export function billTotalCents(bill: SampleBill): number {
-  return bill.lineItems.reduce((sum, item) => sum + item.amountCents, 0);
-}
-
-export function formatCents(cents: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
-    cents / 100,
-  );
-}
