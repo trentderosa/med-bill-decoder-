@@ -36,7 +36,7 @@ export function SampleBills() {
         {SAMPLE_BILLS.map((bill) => (
           <li
             key={bill.id}
-            className="w-60 shrink-0 snap-start rounded-xl border border-slate-200 bg-white p-4 opacity-80 sm:w-auto"
+            className="w-60 shrink-0 snap-start rounded-xl border border-slate-200 bg-white p-4 sm:w-auto"
           >
             <p className="font-medium text-slate-900">{bill.title}</p>
             <p
@@ -48,7 +48,7 @@ export function SampleBills() {
             >
               {bill.issue}
             </p>
-            <p className="mt-3 text-xs font-medium uppercase tracking-wide text-slate-400">
+            <p className="mt-3 text-xs font-medium uppercase tracking-wide text-slate-600">
               Coming soon
             </p>
           </li>
