@@ -169,8 +169,92 @@ describe("balance-billing (No Surprises Act) rule", () => {
     expect(types(nsaBill({ ...NSA_CONTEXT, facilityNetwork: "out-of-network" }))).toEqual([]);
   });
 
-  it("does not flag emergency care under this rule", () => {
-    expect(types(nsaBill({ ...NSA_CONTEXT, emergency: true }))).toEqual([]);
+  it("flags emergency care when the bill is above the EOB patient balance", () => {
+    const flags = computeFlags(nsaBill({ ...NSA_CONTEXT, emergency: true }));
+    expect(flags).toHaveLength(1);
+    expect(flags[0]).toMatchObject({
+      type: "balance-billing",
+      lineItemIds: ["a"],
+    });
+    expect(flags[0]!.message).toContain("Possible No Surprises Act issue");
+    expect(flags[0]!.explanation).toMatch(/emergency/);
+    expect(flags[0]!.source).toEqual(SOURCES.nsaProtections);
+  });
+
+  it("flags emergency care regardless of network status or a signed waiver", () => {
+    for (const providerNetwork of ["in-network", "out-of-network"] as const) {
+      for (const facilityNetwork of ["in-network", "out-of-network", undefined] as const) {
+        for (const noticeAndConsentWaiverSigned of [true, false, undefined]) {
+          const context: BillContext = {
+            emergency: true,
+            providerNetwork,
+            facilityNetwork,
+            noticeAndConsentWaiverSigned,
+            eobPatientBalanceCents: 30000,
+          };
+          expect(types(nsaBill(context))).toEqual(["balance-billing"]);
+        }
+      }
+    }
+  });
+
+  it("does not flag emergency care at or below the EOB patient balance", () => {
+    expect(types(nsaBill({ ...NSA_CONTEXT, emergency: true }, 30000))).toEqual([]);
+  });
+
+  it("does not flag emergency care without an EOB patient balance", () => {
+    expect(
+      types(
+        nsaBill({
+          ...NSA_CONTEXT,
+          emergency: true,
+          eobPatientBalanceCents: undefined,
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not flag emergency care before the Act took effect (Jan 1, 2022)", () => {
+    const early = bill(
+      [
+        line({
+          id: "a",
+          code: "58262",
+          date: "2021-12-31",
+          amountCents: 220000,
+        }),
+      ],
+      { ...NSA_CONTEXT, emergency: true },
+    );
+    expect(types(early)).toEqual([]);
+  });
+
+  it("caps an emergency bill at the EOB patient balance", () => {
+    const est = estimateOwed(nsaBill({ emergency: true, eobPatientBalanceCents: 30000 }));
+    expect(est.amountCents).toBe(30000);
+    expect(est.steps.join("\n")).toContain("No Surprises Act protections may apply");
+  });
+
+  it("never suggests emergency care is unprotected", () => {
+    const contexts: BillContext[] = [
+      NSA_CONTEXT,
+      { ...NSA_CONTEXT, emergency: true },
+      { ...NSA_CONTEXT, emergency: true, providerNetwork: "in-network" },
+      { ...NSA_CONTEXT, emergency: true, noticeAndConsentWaiverSigned: true },
+    ];
+    const bills = [...SAMPLE_BILLS, ...contexts.map((c) => nsaBill(c))];
+    const texts = bills.flatMap((b) => [
+      ...computeFlags(b).flatMap((f) => [f.message, f.explanation]),
+      ...estimateOwed(b).steps,
+    ]);
+    const sentences = texts.flatMap((t) => t.split(/(?<=\.)\s+/));
+    const emergencySentences = sentences.filter((s) => /emergenc/i.test(s));
+    expect(emergencySentences.length).toBeGreaterThan(0);
+    for (const sentence of emergencySentences) {
+      expect(sentence).not.toMatch(
+        /unprotected|not (?:be )?(?:protected|covered)|isn't (?:protected|covered)|aren't (?:protected|covered)|doesn't (?:protect|cover|apply)|don't (?:protect|cover|apply)|excluded|exempt/i,
+      );
+    }
   });
 
   it("does not flag when the bill is at or below the EOB patient balance", () => {
@@ -263,10 +347,14 @@ describe("estimateOwed", () => {
     expect(est.steps.join("\n")).toContain("EOB patient balance");
   });
 
-  it("uses the GFE as the PPDR reference", () => {
+  it("can't estimate a GFE-dispute bill and shows the GFE only as a reference", () => {
     const est = estimateOwed(byId("over-good-faith-estimate"));
-    expect(est.amountCents).toBe(20000);
-    expect(est.steps.join("\n")).toMatch(/Good Faith Estimate/);
+    expect(est.amountCents).toBeNull();
+    const text = est.steps.join("\n");
+    expect(text).toContain("For reference, the Good Faith Estimate was $200.00 (illustrative)");
+    expect(text).toContain("Estimate: can't be estimated until the dispute is resolved.");
+    expect(text).not.toMatch(/→ \$200\.00/);
+    expect(text).not.toContain("Estimate: $200.00");
   });
 
   it("can't estimate an unbundled bill and invents no price for 58262", () => {

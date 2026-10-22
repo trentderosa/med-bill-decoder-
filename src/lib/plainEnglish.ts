@@ -17,7 +17,7 @@ const CODE_EXPLANATIONS: Readonly<Record<string, string>> = {
 const DX_EXPLANATIONS: Readonly<Record<string, string>> = {
   "J02.9": "Sore, inflamed throat (acute pharyngitis); the cause isn't specified.",
   "S93.401A":
-    "Sprained right ankle; the specific ligament isn't named. “A” means the first visit for this injury.",
+    "Sprained right ankle; the specific ligament isn't named. “A” means the injury is still in active treatment (initial encounter).",
 };
 
 export function explainCode(code: string, fallback: string): string {

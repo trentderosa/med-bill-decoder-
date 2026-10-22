@@ -103,6 +103,18 @@ describe("SampleBills", () => {
     expect(within(billView()).getByText("Can't be estimated")).toBeInTheDocument();
   });
 
+  it("shows a GFE-dispute bill as not estimable, with the GFE only as a reference", async () => {
+    const user = userEvent.setup();
+    render(<SampleBills />);
+    await user.click(screen.getByRole("button", { name: /over the good faith estimate/i }));
+    const view = within(billView());
+    expect(view.getByText("Can't be estimated")).toBeInTheDocument();
+    expect(view.getByText(/For reference, the Good Faith Estimate was/)).toBeInTheDocument();
+    expect(
+      view.getByText("Estimate: can't be estimated until the dispute is resolved."),
+    ).toBeInTheDocument();
+  });
+
   it("shows the unbundling message with CMS-guidance wording", async () => {
     const user = userEvent.setup();
     render(<SampleBills />);

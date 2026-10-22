@@ -177,27 +177,46 @@ function balanceBillingFlags(bill: EngineBill): Flag[] {
   const ctx = bill.context;
   const eob = ctx.eobPatientBalanceCents;
   const total = billTotal(bill);
-  const applies =
-    ctx.providerNetwork === "out-of-network" &&
-    ctx.facilityNetwork === "in-network" &&
-    ctx.emergency === false &&
-    ctx.noticeAndConsentWaiverSigned === false &&
+  const billAboveEob =
     eob !== undefined &&
     total > eob &&
     bill.lineItems.length > 0 &&
     bill.lineItems.every((item) => item.date >= NSA_EFFECTIVE_DATE);
-  if (!applies) return [];
+  if (!billAboveEob) return [];
+  const comparison =
+    `The bill total is ${money(total, bill.illustrative)}, but your EOB patient balance is ` +
+    `${money(eob, bill.illustrative)}. `;
+  let reason: string;
+  if (ctx.emergency === true) {
+    // CMS key protections: emergency services are protected from surprise balance
+    // billing regardless of network status; notice and consent can't waive this.
+    reason =
+      "This was emergency care. The No Surprises Act protects most emergency services from " +
+      "surprise balance billing, whether or not the provider or facility is in your network, " +
+      "and a notice-and-consent waiver can't give up that protection. ";
+  } else if (
+    ctx.emergency === false &&
+    ctx.providerNetwork === "out-of-network" &&
+    ctx.facilityNetwork === "in-network" &&
+    ctx.noticeAndConsentWaiverSigned === false
+  ) {
+    reason =
+      "The provider is out of network, the facility is in network, the care was not an " +
+      "emergency, and no notice-and-consent waiver was signed. The No Surprises Act bars " +
+      "balance billing for this kind of care. ";
+  } else {
+    return [];
+  }
   return [
     {
       type: "balance-billing",
       lineItemIds: bill.lineItems.map((item) => item.id),
       message: "Bill is higher than your EOB patient balance. Possible No Surprises Act issue.",
       explanation:
-        `The bill total is ${money(total, bill.illustrative)}, but your EOB patient balance is ` +
-        `${money(eob, bill.illustrative)}. The provider is out of network, the facility is in ` +
-        "network, the care was not an emergency, and no notice-and-consent waiver was signed. " +
-        "The No Surprises Act bars balance billing for this kind of care, and CMS says your bill " +
-        "shouldn't be higher than the EOB patient balance. Talk to the provider and your plan.",
+        comparison +
+        reason +
+        "CMS says your bill shouldn't be higher than the EOB patient balance. Talk to the " +
+        "provider and your plan.",
       source: SOURCES.nsaProtections,
       relatedSources: [SOURCES.readEob],
     },
@@ -288,16 +307,21 @@ export function estimateOwed(bill: EngineBill): OwedEstimate {
   }
 
   const gfe = bill.context.gfeTotalCents;
-  if (flags.some((f) => f.type === "gfe-overage") && gfe !== undefined && amount > gfe) {
+  let pendingDispute = false;
+  if (flags.some((f) => f.type === "gfe-overage") && gfe !== undefined) {
+    pendingDispute = true;
     steps.push(
-      `Use the Good Faith Estimate as the reference for patient-provider dispute resolution: ` +
-        `${m(amount)} → ${m(gfe)}. The final amount is decided in that process, and filing ` +
-        "costs $25 (45 CFR 149.620).",
+      `For reference, the Good Faith Estimate was ${m(gfe)}. You may be eligible for ` +
+        "patient-provider dispute resolution; the amount you owe is decided in that process, " +
+        "not set to the Good Faith Estimate. Filing costs $25 (45 CFR 149.620).",
     );
-    amount = gfe;
   }
 
   if (flags.length === 0) steps.push("No issues were flagged, so the bill total stands.");
+  if (pendingDispute) {
+    steps.push("Estimate: can't be estimated until the dispute is resolved.");
+    return { amountCents: null, steps };
+  }
   steps.push(estimable ? `Estimate: ${m(amount)}.` : "Estimate: can't be estimated.");
   return { amountCents: estimable ? amount : null, steps };
 }

@@ -9,6 +9,12 @@ describe("plain-English explanations", () => {
     }
   });
 
+  it("explains the 7th character A as initial encounter (active treatment)", () => {
+    const text = explainDx("S93.401A", "");
+    expect(text).toContain("active treatment (initial encounter)");
+    expect(text).not.toMatch(/first visit/);
+  });
+
   it("falls back to the bill's descriptor for unknown codes", () => {
     expect(explainCode("00000", "Descriptor from the bill")).toBe("Descriptor from the bill");
     expect(explainDx("Z00.0", "Dx descriptor")).toBe("Dx descriptor");
