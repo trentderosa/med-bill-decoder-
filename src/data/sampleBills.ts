@@ -251,11 +251,11 @@ export const SAMPLE_BILLS: readonly SampleBill[] = [
   {
     id: "over-good-faith-estimate",
     title: "Over the Good Faith Estimate",
-    summary: "Self-pay bill $450 above the estimate",
+    summary: "Self-pay bill $450 above the estimate (illustrative)",
     patient: { name: "Lee Imaginary", note: "Uninsured, self-pay" },
     provider: { name: "Cedar Point Orthopedics (fictional)" },
     notes: [
-      "Patient-provider dispute resolution: file within 120 days of receiving the bill. The fee is $25.",
+      "Patient-provider dispute resolution: file within 120 days of receiving the bill. The fee is $25 (45 CFR 149.620).",
     ],
     lineItems: [
       {

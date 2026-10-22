@@ -72,3 +72,28 @@ describe("SAMPLE_BILLS data", () => {
     expect(unbundling?.expectedFlag?.message).toContain("commonly bundled per CMS guidance");
   });
 });
+
+// Every user-facing text that mentions a dollar amount must either be labeled
+// illustrative (made-up demo figure) or cite the real rule it comes from
+// (e.g. the $25 PPDR fee in 45 CFR 149.620).
+const CITATION = /\b\d+\s+CFR\s+\d+(\.\d+)?\b|https?:\/\//i;
+
+describe("dollar amounts in card and summary text", () => {
+  it.each(SAMPLE_BILLS.map((b) => [b.title, b] as const))(
+    "%s: every $ text is labeled illustrative or cites a source",
+    (_title, bill) => {
+      const texts = [
+        bill.title,
+        bill.summary,
+        ...(bill.notes ?? []),
+        ...bill.lineItems.flatMap((li) =>
+          li.expectedFlag ? [li.expectedFlag.message] : [],
+        ),
+      ];
+      for (const text of texts.filter((t) => t.includes("$"))) {
+        const ok = /illustrative/i.test(text) || CITATION.test(text);
+        expect(ok, `"${text}" needs "illustrative" or a citation`).toBe(true);
+      }
+    },
+  );
+});
