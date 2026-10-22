@@ -121,10 +121,22 @@ describe("unbundling rule", () => {
       bill([line({ id: "a", code: "58260" }), line({ id: "b", code: "58720" })]),
     );
     expect(flags).toHaveLength(1);
-    expect(flags[0]).toMatchObject({ type: "unbundling", lineItemIds: ["a", "b"] });
+    expect(flags[0]).toMatchObject({ type: "unbundling", lineItemIds: ["b"] });
     expect(flags[0]!.message).toContain("commonly bundled per CMS guidance");
     expect(flags[0]!.message).toContain("58262");
     expect(flags[0]!.source).toEqual(SOURCES.ncciManual);
+  });
+
+  it("flags only the column-two code (58720), never the column-one code (58260)", () => {
+    for (const order of [
+      ["58260", "58720"],
+      ["58720", "58260"],
+    ]) {
+      const items = order.map((code) => line({ id: code, code }));
+      const flags = computeFlags(bill(items));
+      expect(flags.flatMap((f) => f.lineItemIds)).toEqual(["58720"]);
+      expect(flags[0]!.explanation).toContain("column-two code");
+    }
   });
 
   it("does not flag the pair on different dates", () => {

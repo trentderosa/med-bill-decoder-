@@ -8,7 +8,7 @@ export type ExpectedFlag = { type: FlagType; lineItemIds: string[] };
 export const EXPECTED_FLAGS: Readonly<Record<string, ExpectedFlag[]>> = {
   "duplicate-charge": [{ type: "duplicate", lineItemIds: ["dup-2"] }],
   "upcoded-visit": [{ type: "upcoding", lineItemIds: ["up-1"] }],
-  "unbundled-procedure": [{ type: "unbundling", lineItemIds: ["unb-1", "unb-2"] }],
+  "unbundled-procedure": [{ type: "unbundling", lineItemIds: ["unb-2"] }],
   "surprise-balance-bill": [{ type: "balance-billing", lineItemIds: ["bal-1"] }],
   "over-good-faith-estimate": [{ type: "gfe-overage", lineItemIds: ["gfe-1"] }],
   "clean-bill": [],
