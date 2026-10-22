@@ -158,9 +158,15 @@ function wrap(kind: keyof typeof START_END, body: string[]): string {
 function disputeReason(bill: LetterBill, flag: Flag, item: LetterLineItem): string {
   switch (flag.type) {
     case "duplicate": {
+      // Same key as the engine's duplicate rule: code, date, units, and provider.
+      const provider = (li: LetterLineItem) => li.providerName ?? bill.provider.name;
       const original = bill.lineItems.find(
         (other) =>
-          other.code === item.code && other.date === item.date && other.units === item.units,
+          other.id !== item.id &&
+          other.code === item.code &&
+          other.date === item.date &&
+          other.units === item.units &&
+          provider(other) === provider(item),
       );
       return `duplicate of line ${original ? lineNumber(bill, original.id) : "[LINE]"}`;
     }
@@ -267,7 +273,7 @@ function nsaComplaint(bill: LetterBill, flags: Flag[]): Letter {
       `Use this summary to file a complaint online or by phone at ${NSA_HELP_DESK_PHONE}. Have ` +
       "the bill, a photo of your insurance card, and the EOB ready, plus any Good Faith " +
       "Estimate, signed notice-and-consent form, correspondence, or appeal decisions. You get a " +
-      "confirmation number, and CMS contacts you within 60 days if it needs more information.",
+      "confirmation number.",
     secondary: false,
     flagTypes: [...new Set(flags.map((f) => f.type))],
     label: LETTER_LABEL,
@@ -322,13 +328,19 @@ function gfeDispute(bill: LetterBill, flags: Flag[]): Letter {
   };
 }
 
+/** "a, b, or c" for every flag type in the letter that has an entry in `map`. */
+function eachFlagType(flags: Flag[], map: Partial<Record<FlagType, string>>): string | undefined {
+  const parts = [...new Set(flags.map((f) => f.type))].flatMap((type) => map[type] ?? []);
+  if (parts.length <= 1) return parts[0];
+  return `${parts.slice(0, -1).join(", ")}, or ${parts.at(-1)}`;
+}
+
 function insurerAppeal(bill: LetterBill, flags: Flag[]): Letter {
-  const first = flags[0]!;
   const items = bill.lineItems.filter((item) =>
     flags.some((flag) => flag.lineItemIds.includes(item.id)),
   );
   const services = items.map(lineLabel).join("; ") || "[SERVICE]";
-  const example = APPEAL_EXPLANATION_EXAMPLE[first.type] ?? "covered under plan section X";
+  const example = eachFlagType(flags, APPEAL_EXPLANATION_EXAMPLE) ?? "covered under plan section X";
   const text = wrap("letter", [
     "[DATE]",
     "[PLAN/INSURER APPEALS ADDRESS FROM DENIAL NOTICE]",
@@ -353,11 +365,11 @@ function insurerAppeal(bill: LetterBill, flags: Flag[]): Letter {
     title: LETTER_TITLES["insurer-appeal"],
     recipient: "Your health plan, at the appeals address on the denial notice or EOB",
     whenToUse:
-      `Secondary option. Use this only if your insurer ${APPEAL_WHEN[first.type]}. Follow the ` +
-      "appeal instructions on the denial notice. You can ask to review the claim file and " +
-      "present evidence, and ask for the diagnosis and treatment codes (that request doesn't " +
-      "count as an appeal). If you're in ongoing treatment, coverage continues while the appeal " +
-      "is pending.",
+      `Secondary option. Use this only if your insurer ${eachFlagType(flags, APPEAL_WHEN)}. ` +
+      "Follow the appeal instructions on the denial notice. You can ask to review the claim " +
+      "file and present evidence, and ask for the diagnosis and treatment codes (that request " +
+      "doesn't count as an appeal). If you're in ongoing treatment, coverage continues while " +
+      "the appeal is pending.",
     secondary: true,
     flagTypes: [...new Set(flags.map((f) => f.type))],
     label: LETTER_LABEL,

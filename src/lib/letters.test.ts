@@ -110,6 +110,23 @@ describe("letters are filled from each sample's fake data", () => {
     expect(letter!.text).toContain("[PROVIDER ADDRESS]");
   });
 
+  it("points a duplicate at the earlier line from the same provider", () => {
+    const base = byId("duplicate-charge");
+    const line = base.lineItems[0]!;
+    const bill = {
+      ...base,
+      lineItems: [
+        { ...line, id: "a", providerName: "Provider A" },
+        { ...line, id: "b1", providerName: "Provider B" },
+        { ...line, id: "b2", providerName: "Provider B" },
+      ],
+    };
+    const [letter] = buildLetters(bill);
+    const disputed = letter!.text.split("\n").filter((l) => l.includes("duplicate of line"));
+    expect(disputed).toHaveLength(1);
+    expect(disputed[0]).toMatch(/duplicate of line 2$/);
+  });
+
   it("disputes the upcoded visit level", () => {
     const [letter] = buildLetters(byId("upcoded-visit"));
     expect(letter!.text).toContain(
@@ -223,7 +240,40 @@ describe("deadlines", () => {
   });
 });
 
+describe("insurer appeal", () => {
+  it("lists the condition for every flag type it covers", () => {
+    const bill = byId("surprise-balance-bill");
+    const ids = bill.lineItems.map((li) => li.id);
+    const flags = [
+      { ...flag("upcoding"), lineItemIds: ids },
+      { ...flag("balance-billing"), lineItemIds: ids },
+    ];
+    const appeal = buildLetters(
+      { ...bill, context: { ...bill.context, coverage: "insured" } },
+      flags,
+    ).find((l) => l.type === "insurer-appeal")!;
+    expect(appeal.flagTypes).toEqual(["upcoding", "balance-billing"]);
+    expect(appeal.whenToUse).toContain(
+      "denied the claim or applied cost sharing based on the higher visit level",
+    );
+    expect(appeal.whenToUse).toContain("denied the claim or processed it wrong");
+    expect(appeal.text).toContain(
+      "the visit was billed at a higher level than the service documented",
+    );
+    expect(appeal.text).toContain("protected under the No Surprises Act");
+  });
+});
+
 describe("No Surprises complaint", () => {
+  it("has no deadline-like text", () => {
+    const nsa = buildLetters(byId("surprise-balance-bill")).find(
+      (l) => l.type === "nsa-complaint",
+    )!;
+    for (const text of [nsa.text, nsa.whenToUse, nsa.recipient, nsa.noDeadlineNote ?? ""]) {
+      expect(text).not.toContain("60 days");
+    }
+  });
+
   it("contains the Help Desk number 1-800-985-3059", () => {
     const nsa = buildLetters(byId("surprise-balance-bill")).find((l) => l.type === "nsa-complaint")!;
     expect(nsa.text).toContain("1-800-985-3059");
