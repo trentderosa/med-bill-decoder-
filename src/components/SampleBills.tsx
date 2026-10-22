@@ -1,59 +1,59 @@
-import { ComingSoonBadge } from "./UploadPlaceholder";
+"use client";
 
-type SampleBill = {
-  id: string;
-  title: string;
-  issue: string;
-  tone: "flag" | "ok";
-};
-
-export const SAMPLE_BILLS: readonly SampleBill[] = [
-  { id: "er-duplicate", title: "ER visit", issue: "Duplicate charge", tone: "flag" },
-  { id: "mri-upcoded", title: "Outpatient MRI", issue: "Possibly upcoded", tone: "flag" },
-  { id: "surgery-unbundled", title: "Surgery", issue: "Unbundled labs", tone: "flag" },
-  {
-    id: "anesthesia-balance",
-    title: "Out-of-network anesthesia",
-    issue: "Balance bill — No Surprises Act",
-    tone: "flag",
-  },
-  { id: "clean-eob", title: "Clean EOB", issue: "No issues found", tone: "ok" },
-];
+import { useEffect, useRef, useState } from "react";
+import { SAMPLE_BILLS } from "@/data/sampleBills";
+import { BillView } from "./BillView";
 
 export function SampleBills() {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const viewRef = useRef<HTMLHeadingElement>(null);
+  const selected = SAMPLE_BILLS.find((b) => b.id === selectedId) ?? null;
+
+  useEffect(() => {
+    const heading = viewRef.current;
+    if (!selectedId || !heading) return;
+    const reduceMotion =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    heading.scrollIntoView?.({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    heading.focus({ preventScroll: true });
+  }, [selectedId]);
+
   return (
     <section aria-labelledby="samples-heading" className="space-y-3">
-      <div className="flex items-center gap-2">
-        <h2 id="samples-heading" className="text-lg font-semibold text-slate-900">
-          Try a sample bill
-        </h2>
-        <ComingSoonBadge />
-      </div>
+      <h2 id="samples-heading" className="text-lg font-semibold text-slate-900">
+        Try a sample bill
+      </h2>
       <p className="text-sm text-slate-600">
-        Fake, pre-made bills that show what the decoder catches.
+        Fake, pre-made bills that show what the decoder catches. Pick one to view it.
       </p>
-      <ul className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-3">
-        {SAMPLE_BILLS.map((bill) => (
-          <li
-            key={bill.id}
-            className="w-60 shrink-0 snap-start rounded-xl border border-slate-200 bg-white p-4 sm:w-auto"
-          >
-            <p className="font-medium text-slate-900">{bill.title}</p>
-            <p
-              className={
-                bill.tone === "ok"
-                  ? "mt-1 text-sm text-teal-700"
-                  : "mt-1 text-sm text-rose-700"
-              }
-            >
-              {bill.issue}
-            </p>
-            <p className="mt-3 text-xs font-medium uppercase tracking-wide text-slate-600">
-              Coming soon
-            </p>
-          </li>
-        ))}
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {SAMPLE_BILLS.map((bill) => {
+          const flagged = bill.lineItems.some((item) => item.expectedFlag);
+          const pressed = bill.id === selectedId;
+          return (
+            <li key={bill.id}>
+              <button
+                type="button"
+                aria-pressed={pressed}
+                onClick={() => setSelectedId(bill.id)}
+                className={`flex h-full w-full flex-col items-start rounded-xl border bg-white p-4 text-left transition-colors hover:border-teal-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+                  pressed ? "border-teal-600 ring-2 ring-teal-600" : "border-slate-200"
+                }`}
+              >
+                <span className="font-medium text-slate-900">{bill.title}</span>
+                <span
+                  className={flagged ? "mt-1 text-sm text-rose-700" : "mt-1 text-sm text-teal-700"}
+                >
+                  {bill.summary}
+                </span>
+                <span className="mt-3 text-xs text-slate-600">Patient: {bill.patient.name}</span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
+      {selected && <BillView ref={viewRef} bill={selected} />}
     </section>
   );
 }
