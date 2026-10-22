@@ -21,7 +21,7 @@ describe("HomePage", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /coming soon/i })).toBeDisabled();
     expect(screen.getByLabelText(/upload a medical bill or eob/i)).toBeDisabled();
-    expect(screen.getByText("ER visit")).toBeInTheDocument();
-    expect(screen.getByText("Clean EOB")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /duplicate charge/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /clean bill/i })).toBeInTheDocument();
   });
 });
