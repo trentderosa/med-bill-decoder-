@@ -13,7 +13,8 @@ import {
 } from "@/lib/flagEngine";
 import { formatCents, formatDate } from "@/lib/format";
 import { explainCode, explainDx } from "@/lib/plainEnglish";
-import type { Source } from "@/lib/sources";
+import { LetterDrafts } from "./LetterDrafts";
+import { SourceLink } from "./SourceLink";
 
 const FLAG_LABELS: Record<FlagType, string> = {
   duplicate: "Possible duplicate",
@@ -30,19 +31,6 @@ function Party({ label, name, note }: { label: string; name: string; note?: stri
       <dd className="mt-0.5 font-medium text-slate-900">{name}</dd>
       {note && <dd className="text-sm text-slate-600">{note}</dd>}
     </div>
-  );
-}
-
-function SourceLink({ source }: { source: Source }) {
-  return (
-    <a
-      href={source.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="break-words text-teal-800 underline underline-offset-2 hover:text-teal-900"
-    >
-      {source.label} <span className="sr-only">(opens in a new tab)</span>
-    </a>
   );
 }
 
@@ -280,6 +268,8 @@ export function BillView({ bill, ref }: { bill: SampleBill; ref?: Ref<HTMLHeadin
         </ol>
         <p className="text-xs text-slate-600">{ADVICE_NOTE}</p>
       </section>
+
+      <LetterDrafts key={bill.id} bill={bill} />
 
       <section aria-labelledby="sources-heading" className="space-y-2">
         <h4 id="sources-heading" className="font-semibold text-slate-900">

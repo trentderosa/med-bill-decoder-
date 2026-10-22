@@ -53,8 +53,8 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, test, and build on every p
 ```
 src/
   app/          layout.tsx (shell + disclaimer), page.tsx (home), globals.css
-  components/   Disclaimer, Header, UploadPlaceholder, SampleBills, BillView (+ tests)
+  components/   Disclaimer, Header, UploadPlaceholder, SampleBills, BillView, LetterDrafts, SourceLink (+ tests)
   data/         Fake sample bills (+ tests)
-  lib/          flagEngine (pure rule-based flags + owed estimate), plainEnglish, sources, format (+ tests)
+  lib/          flagEngine (pure rule-based flags + owed estimate), letters (pure letter drafts), plainEnglish, sources, format (+ tests)
   test/         Vitest setup
 ```

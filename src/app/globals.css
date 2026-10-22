@@ -13,3 +13,24 @@
 body {
   @apply bg-slate-50 text-slate-800 antialiased;
 }
+
+/* Print only the selected letter draft (set by LetterDrafts' Print button). */
+@media print {
+  html[data-printing="letter"] body * {
+    visibility: hidden;
+  }
+  html[data-printing="letter"] [data-letter-text],
+  html[data-printing="letter"] [data-letter-text] * {
+    visibility: visible;
+  }
+  html[data-printing="letter"] [data-letter-text] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    background: white;
+  }
+}

@@ -68,11 +68,15 @@ export const EM_TIME_RANGES: Readonly<Record<string, { min: number; max: number 
   "99215": { min: 40, max: 54 },
 };
 
-/** Code pairs CMS NCCI guidance says to report as one comprehensive code. */
+/**
+ * Code pairs CMS NCCI guidance says to report as one comprehensive code. NCCI
+ * denies the column-two code of a pair, so only that line is flagged.
+ */
 export const KNOWN_BUNDLES: readonly {
-  codes: readonly [string, string];
+  columnOne: string;
+  columnTwo: string;
   comprehensive: string;
-}[] = [{ codes: ["58260", "58720"], comprehensive: "58262" }];
+}[] = [{ columnOne: "58260", columnTwo: "58720", comprehensive: "58262" }];
 
 /** 45 CFR 149.620: bill at least $400 over the GFE. */
 export const PPDR_THRESHOLD_CENTS = 40000;
@@ -151,20 +155,21 @@ function upcodingFlags(bill: EngineBill): Flag[] {
 function unbundlingFlags(bill: EngineBill): Flag[] {
   const flags: Flag[] = [];
   for (const bundle of KNOWN_BUNDLES) {
-    const [codeA, codeB] = bundle.codes;
-    for (const a of bill.lineItems.filter((item) => item.code === codeA)) {
-      const b = bill.lineItems.find((item) => item.code === codeB && item.date === a.date);
-      if (!b) continue;
+    const { columnOne, columnTwo, comprehensive } = bundle;
+    for (const b of bill.lineItems.filter((item) => item.code === columnTwo)) {
+      const a = bill.lineItems.find((item) => item.code === columnOne && item.date === b.date);
+      if (!a) continue;
       flags.push({
         type: "unbundling",
-        lineItemIds: [a.id, b.id],
-        message: `These codes are commonly bundled per CMS guidance and may need to be billed as one combined code (${bundle.comprehensive}).`,
+        lineItemIds: [b.id],
+        message: `${columnTwo} is commonly bundled per CMS guidance with ${columnOne} and may need to be billed as one combined code (${comprehensive}).`,
         explanation:
-          `${codeA} and ${codeB} were billed on the same date (${formatDate(a.date)}). The CMS ` +
-          `NCCI Policy Manual, Chapter 1, says to report the single comprehensive code ` +
-          `${bundle.comprehensive} instead of these two codes. NCCI is a Medicare program, so ` +
-          "other payers may use different edits, and a modifier on the line can sometimes be an " +
-          "allowed exception.",
+          `${columnOne} and ${columnTwo} were billed on the same date (${formatDate(b.date)}). The ` +
+          `CMS NCCI Policy Manual, Chapter 1, says to report the single comprehensive code ` +
+          `${comprehensive} instead of these two codes. NCCI edits deny the column-two code ` +
+          `(${columnTwo}, line ${lineNumber(bill, b.id)}), so that is the line flagged. NCCI is a ` +
+          "Medicare program, so other payers may use different edits, and a modifier on the line " +
+          "can sometimes be an allowed exception.",
         source: SOURCES.ncciManual,
         relatedSources: [SOURCES.ncciPtp],
       });
@@ -285,8 +290,8 @@ export function estimateOwed(bill: EngineBill): OwedEstimate {
 
   for (const flag of flags.filter((f) => f.type === "unbundling")) {
     const bundle = KNOWN_BUNDLES.find((b) =>
-      flag.lineItemIds.every((id) =>
-        b.codes.includes(bill.lineItems.find((li) => li.id === id)?.code ?? ""),
+      flag.lineItemIds.every(
+        (id) => bill.lineItems.find((li) => li.id === id)?.code === b.columnTwo,
       ),
     );
     estimable = false;

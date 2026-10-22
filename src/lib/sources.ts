@@ -55,4 +55,16 @@ export const SOURCES = {
     label: "45 CFR 149.620 — patient-provider dispute resolution",
     url: "https://www.ecfr.gov/current/title-45/subtitle-A/subchapter-B/part-149/subpart-G/section-149.620",
   },
+  cfr147136: {
+    label: "45 CFR 147.136 — internal claims and appeals and external review",
+    url: "https://www.ecfr.gov/current/title-45/subtitle-A/subchapter-B/part-147/section-147.136",
+  },
+  cfr2560503: {
+    label: "29 CFR 2560.503-1 — ERISA claims procedure",
+    url: "https://www.ecfr.gov/current/title-29/subtitle-B/chapter-XXV/subchapter-F/part-2560/section-2560.503-1",
+  },
+  nsaComplaint: {
+    label: "CMS: Submit a No Surprises complaint",
+    url: "https://www.cms.gov/medical-bill-rights/help/submit-a-complaint",
+  },
 } as const satisfies Record<string, Source>;
